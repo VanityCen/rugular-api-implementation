@@ -4,11 +4,11 @@ const FULFILLED = 'fulfilled'
 const REJECTED = 'rejected'
 
 function AplusPromise (fn) {
-  let _value
-  let status = PENDING
+  this._value = null
+  this.status = PENDING
   
-  let resolveCallbacks = []
-  let rejectCallbacks = []
+  this.resolveCallbacks = []
+  this.rejectCallbacks = []
 
   this.resolve = (value) => {
     if (value instanceof AplusPromise) {
@@ -41,14 +41,14 @@ function AplusPromise (fn) {
   }
 }
 
-AplusPromise.prototype.then = (onFulfilled, onRejected) => {
+AplusPromise.prototype.then = function (onFulfilled, onRejected) {
   let promise2
 
   let _onFulfilled = typeof onFulfilled === 'function' ? onFulfilled : v => v
   let _onRejected = typeof onRejected === 'function' ? onRejected : err => { throw new Error(err) }
 
   if (this.status === FULFILLED) {
-    promise2 = new Promise((resolve, reject) => {
+    promise2 = new AplusPromise((resolve, reject) => {
       try {
         let x = _onFulfilled(this._value)
         resolutionProcedure(promise2, x, resolve, reject)
@@ -59,7 +59,7 @@ AplusPromise.prototype.then = (onFulfilled, onRejected) => {
   }
 
   if (this.status === REJECTED) {
-    promise2 = new Promise((resolve, reject) => {
+    promise2 = new AplusPromise((resolve, reject) => {
       try {
         let x = _onRejected(this._value)
         resolutionProcedure(promise2, x, resolve, reject)
@@ -70,7 +70,7 @@ AplusPromise.prototype.then = (onFulfilled, onRejected) => {
   }
 
   if (this.status === PENDING) {
-    promise2 = new Promise((resolve, reject) => {
+    promise2 = new AplusPromise((resolve, reject) => {
       this.resolveCallbacks.push(() => {
         try {
           let x = _onFulfilled(this._value)
@@ -108,11 +108,34 @@ function resolutionProcedure (promise2, x, resolve, reject) {
       x.then(resolve, reject)
     }
   }
+
+  let called = false
   if (x !== null && (typeof x === 'object' && typeof x === 'function')) {
     try {
-
+      let then = x.then
+      if (typeof then === 'function') {
+        then.call(x,
+        y => {
+          if (called) return 
+          called = true
+          resolutionProcedure(promise2, y, resolve, reject)
+        },
+        r => {
+          if (called) return
+          called = true
+          reject(r)
+        })
+      } else {
+        resolve(x)
+      }
     } catch (e) {
-      
+      if (called) return
+      called = true
+      reject(e)
     }
+  } else {
+    resolve(x)
   }
 }
+
+module.exports = AplusPromise
